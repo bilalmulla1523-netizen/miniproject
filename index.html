@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website Authenticity Checker</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<style>
+   /* --- Basic Layout --- */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.wrapper {
+    width: 100%;
+    max-width: 900px;
+    padding: 16px;
+}
+
+.card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 26px 24px;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+}
+
+/* --- Header --- */
+h1 {
+    margin: 0 0 4px;
+    font-size: 1.8rem;       /* Increased */
+    font-weight: 600;
+    color: #111827;
+}
+
+.subtitle {
+    margin: 0 0 20px;
+    font-size: 1.05rem;      /* Increased */
+    color: #6b7280;
+}
+
+/* --- Form --- */
+label {
+    font-size: 1rem;         /* Increased */
+    color: #374151;
+    display: block;
+    margin-bottom: 6px;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 14px 14px;
+    border-radius: 10px;
+    border: 1px solid #d1d5db;
+    font-size: 1.05rem;      /* Increased */
+    outline: none;
+}
+
+.btn-primary {
+    margin-top: 12px;
+    padding: 12px 18px;
+    border-radius: 8px;
+    border: none;
+    background: #2563eb;
+    color: #ffffff;
+    font-size: 1.05rem;     /* Increased */
+    font-weight: 600;
+}
+
+/* --- Result & status --- */
+.result {
+    margin-top: 18px;
+    font-size: 1.1rem;      /* Increased */
+    font-weight: 500;
+}
+
+.status-badge {
+    margin-top: 8px;
+    font-size: 1rem;        /* Increased */
+    padding: 5px 12px;
+}
+
+/* --- QR Section --- */
+.qr-title {
+    font-size: 1rem;         /* Increased */
+    margin-bottom: 6px;
+    color: #4b5563;
+}
+
+#qrcode {
+    display: inline-block;
+}
+
+/* --- Report Section --- */
+.report h3 {
+    font-size: 1.1rem;        /* Increased */
+    margin-bottom: 8px;
+}
+
+textarea {
+    width: 100%;
+    min-height: 80px;         /* Taller textarea */
+    border-radius: 10px;
+    padding: 10px;
+    font-size: 1rem;          /* Increased */
+}
+
+.btn-report {
+    margin-top: 10px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 1rem;          /* Increased */
+}
+
+#reportStatus {
+    margin-top: 8px;
+    font-size: 0.95rem;       /* Increased */
+}
+
+/* --- Footer note --- */
+.footer-note {
+    margin-top: 14px;
+    font-size: 0.9rem;        /* Increased */
+    color: #9ca3af;
+}
+
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+  <div class="card">
+
+    <h1>Website QR Generater</h1>
+    <p class="subtitle">
+      Enter a website URL to check its format, detect common phishing patterns, and verify if the site is active.
+    </p>
+
+    <label for="url">Website URL</label>
+    <input type="text" id="url" placeholder="e.g. https://example.com">
+
+    <button class="btn-primary" onclick="checkWebsite()">
+      🔍 Check Website
+    </button>
+
+    <div class="top-row">
+      <div class="left-col">
+        <div class="result" id="result"></div>
+        <div class="status-badge" id="statusBadge">Status: Waiting for input</div>
+
+        <div class="report" id="reportForm">
+          <h3>Report Suspicious Website</h3>
+          <textarea id="reason" placeholder="Describe why this website looks fake or dangerous..."></textarea>
+          <button class="btn-report" onclick="submitReport()">Submit Report</button>
+          <div id="reportStatus"></div>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="qr-box">
+          <div class="qr-title">QR Code (shown only if website is active)</div>
+          <div id="qrcode"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Note: This tool checks basic patterns and server response. It does not guarantee complete security.
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* 1️⃣ MAIN CHECK FUNCTION */
+async function checkWebsite() {
+    const urlInput = document.getElementById("url").value.trim();
+    const result = document.getElementById("result");
+    const qrDiv = document.getElementById("qrcode");
+    const reportForm = document.getElementById("reportForm");
+    const badge = document.getElementById("statusBadge");
+
+    qrDiv.innerHTML = "";
+    reportForm.style.display = "none";
+    badge.textContent = "Status: Checking...";
+
+    // Basic URL validation
+    const urlPattern = /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
+
+    if (!urlPattern.test(urlInput)) {
+        result.textContent = "❌ Invalid or suspicious URL format.";
+        result.style.color = "#b91c1c";
+        badge.textContent = "Status: Format error";
+        reportForm.style.display = "block";
+        saveCheck(urlInput, 1);
+        return;
+    }
+
+    // Suspicious pattern detection
+    const suspiciousPatterns = [
+        /\d{6,}/,
+        /--/,
+        /\.zip$|\.xyz$|\.top$|\.loan$/,
+        /^https?:\/\/\d+\.\d+\.\d+\.\d+/,
+        /xn--/
+    ];
+    const isSuspicious = suspiciousPatterns.some(p => p.test(urlInput));
+
+    const normalizedUrl = urlInput.startsWith("http")
+        ? urlInput
+        : "https://" + urlInput;
+
+    // Log basic check
+    saveCheck(normalizedUrl, isSuspicious ? 1 : 0);
+
+    if (isSuspicious) {
+        result.textContent = "⚠ URL pattern looks suspicious. Checking if the site is active...";
+        result.style.color = "#b45309";
+        badge.textContent = "Status: Suspicious pattern";
+        reportForm.style.display = "block";
+    } else {
+        result.textContent = "Checking if the website is active...";
+        result.style.color = "#1d4ed8";
+    }
+
+    // Check active status via backend
+    const active = await isWebsiteActive(normalizedUrl);
+
+    if (!active) {
+        result.textContent = "❌ Website seems INACTIVE or unreachable.";
+        result.style.color = "#b91c1c";
+        badge.textContent = "Status: Inactive / unreachable";
+        reportForm.style.display = "block";
+        return;
+    }
+
+    // Website is active → show QR
+    result.textContent = "✅ Website is ACTIVE. QR code generated for quick access.";
+    result.style.color = "#15803d";
+    badge.textContent = "Status: Active website";
+
+    new QRCode(qrDiv, {
+        text: normalizedUrl,
+        width: 140,
+        height: 140
+    });
+}
+
+/* 2️⃣ CHECK STATUS WITH PHP */
+async function isWebsiteActive(url) {
+    try {
+        const res = await fetch("check_status.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "url=" + encodeURIComponent(url)
+        });
+
+        if (!res.ok) return false;
+
+        const data = await res.json();
+        return !!data.active;
+    } catch (err) {
+        console.error("isWebsiteActive error:", err);
+        return false;
+    }
+}
+
+/* 3️⃣ LOG CHECK TO DATABASE */
+function saveCheck(url, isSuspicious) {
+    fetch("save_check.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body:
+            "url=" + encodeURIComponent(url) +
+            "&is_suspicious=" + encodeURIComponent(isSuspicious)
+    })
+    .then(r => r.text())
+    .then(t => console.log("save_check:", t))
+    .catch(e => console.error("save_check error:", e));
+}
+
+/* 4️⃣ SUBMIT REPORT */
+function submitReport() {
+    const reason = document.getElementById("reason").value.trim();
+    const url = document.getElementById("url").value.trim();
+    const status = document.getElementById("reportStatus");
+
+    if (!url) {
+        status.textContent = "Please enter a URL before reporting.";
+        status.style.color = "#b45309";
+        return;
+    }
+    if (!reason) {
+        status.textContent = "Please describe why the site is suspicious.";
+        status.style.color = "#b45309";
+        return;
+    }
+
+    fetch("report_site.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body:
+            "url=" + encodeURIComponent(url) +
+            "&reason=" + encodeURIComponent(reason)
+    })
+    .then(r => r.text())
+    .then(t => {
+        status.textContent = t;
+        status.style.color = "#15803d";
+        document.getElementById("reason").value = "";
+    })
+    .catch(e => {
+        console.error("report_site error:", e);
+        status.textContent = "Error submitting report. Try again.";
+        status.style.color = "#b91c1c";
+    });
+}
+</script>
+
+</body>
+</html>
